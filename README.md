@@ -1,73 +1,77 @@
-# 第十四届全国大学生GIS应用技能大赛（A卷·上午）全自动解题与 Agent Skill 仓库
+# 14th National GIS Application Skills Contest (Morning Session A) Automation Pipeline & Agent Skill
 
-本仓库包含第十四届全国大学生GIS应用技能大赛（上午A卷）的**全套高精预处理、空间建模与影像配准分析**全自动解题脚本与 Agent 技能包。
+This repository contains the complete, high-precision automated data processing, spatial modeling, and imagery registration pipeline for the **14th National GIS Application Skills Contest (Morning Session A)**, packaged as a reusable Agent Skill.
 
-项目采用模块化、可复用的设计，结合学术级 Python 空间数据分析库（`GeoPandas`、`Rasterio`、`SciPy`），实现了从原始数据清洗、气候插值、地形处理，到遥感旋转配准、云空洞修补以及地表覆盖更新统计的端到端自动化。
-
----
-
-## 🌟 核心功能特性
-
-1. **高精野生动物数据预处理（Task 1）**：
-   - 自动清洗和解析中文环境下非标准格式的“度分秒（DMS）”经纬度坐标，成功率 **100%**。
-   - 物理剔除缺失行、重复行以及超出合理经纬度范围的空间异常值（Outliers）。
-   - 智能提取点包络矩形并向外缓冲 **2 km** 建立标准的 UTM Zone 10N 研究区边界面（`study_area.shp`）。
-2. **气象站点清洗与高精插值（Task 2）**：
-   - 自动过滤物理极值异常与空间坐标野点，完成开氏度到摄氏度的物理转换。
-   - 内置 **10% 独立样本交叉检验集**，基于 Delaunay 三角网的 Linear Griddata 插值算法对降水和温度进行空间建模。
-   - **双优保障**：温度 RMSE ($\approx 0.36 ^\circ\text{C}$) 和降水 RMSE ($\approx 0.40\text{ mm}$) 均远优于赛题要求的上限 $0.5$。
-3. **DEM 镶嵌裁剪网格对齐（Task 2）**：
-   - 无缝拼接多幅 DEM 分幅，重投影至平面直角坐标系（`EPSG:32610`），应用双线性重采样（像元大小 **30 米**）并按研究区边界做精确掩膜裁剪。
-4. **遥感影像旋转与 2D FFT 快速自动平移配准（Task 3）**：
-   - Landsat 影像自动旋转 **90 度 CCW**，匹配研究区垂直展布特征。
-   - 采用 **快速傅里叶变换（2D FFT）空间互相关算法** 搜寻最佳配准位置（用时 <2 秒），精确计算 Landsat 与土地利用岸线地物间的物理偏置（$dx = 660.0$ 米, $dy = -18810.0$ 米）。
-   - 将 Landsat 的 6 个全色/多光谱波段自动重投影并裁剪输出至高分 15m 网格中。
-5. **土地覆盖云修复与特征指数提取统计（Task 3）**：
-   - 将 landcover 原始地类重采样至 10m UTM 标准网格。
-   - 基于**局部众数邻域搜索（Focal Majority Mode）** 100% 完美修复云层遮挡区域（值 10）。
-   - 基于归一化波段自动提取 **MNDWI 水体指数**（阈值 >0.4，连通面积 >0.1 km²）和 **BU 建成区指数**（阈值 >3.0，连通面积 >1.0 km²），智能更新土地覆被，输出精密的地类面积和比例普查 CSV 报表。
+Designed with modularity and reproducibility in mind, this project leverages academic-grade Python spatial libraries (`GeoPandas`, `Rasterio`, `SciPy`, `Shapely`, `Matplotlib`, `Pillow`) to deliver an end-to-end automation tool that covers data cleaning, climate interpolation, DEM mosaicing, Landsat FFT registration, and landcover updates.
 
 ---
 
-## 📂 仓库目录结构
+## 🌟 Key Features
+
+1. **High-Precision Point Cleaning & Study Area Generation (Task 1)**:
+   - Automatically parses non-standard Degree-Minute-Second (DMS) coordinates under various encodings with a **100% success rate**.
+   - Filters out null records, exact duplicates, and spatial outliers (e.g. coordinates in wrong hemispheres/quadrants).
+   - Extracts the bounding envelope of observation points and applies a **2 km buffer** to generate the UTM Zone 10N study area boundary (`study_area.shp`).
+2. **Climate Station Cleaning & Grid Interpolation (Task 2)**:
+   - Drops duplicate stations, incorrect coordinates, and invalid temperature readings (extreme values).
+   - Incorporates a **10% random independent validation split** to check interpolation accuracy.
+   - Fits a Delaunay triangulation-based Linear Griddata model to generate 30m resolution grids.
+   - **Guaranteed Precision**: Validation checks confirm Temperature RMSE ($\approx 0.36 ^\circ\text{C}$) and Precipitation RMSE ($\approx 0.40\text{ mm}$) are well below the required $\le 0.5$ limit.
+3. **DEM Mosaic, Reprojection & Clipping (Task 2)**:
+   - Mosaics multiple DEM elevation tiles in geographic coordinate system.
+   - Reprojects the merged raster to UTM Zone 10N at **30m resolution** with bilinear resampling.
+   - Clips the final grid precisely to the study area boundary.
+4. **Landsat Image CCW Rotation & FFT-based Auto-Registration (Task 3)**:
+   - Automatically rotates Landsat bands by **90 degrees CCW** to match the vertical aspect ratio of the study area.
+   - Utilizes a **2D Fast Fourier Transform (FFT) cross-correlation algorithm** to search for the best alignment between Landsat water bodies and the landcover shoreline (executes in <2 seconds).
+   - Computes and applies precise translation offsets ($dx = 660.0$ m, $dy = -18810.0$ m) at full-resolution (15m), outputting a georeferenced, clipped multiband GeoTIFF.
+5. **Landcover Cloud Repair & Feature Index Extraction (Task 3)**:
+   - Warps raw landcover to the 10m UTM target grid.
+   - Implements an adaptive **local window majority focal filter** to 100% repair cloud-obstructed pixels (value 10).
+   - Extracts **MNDWI water index** (>0.4, size >0.1 km²) and **BU built-up index** (>3.0, size >1.0 km²) from registered Landsat bands, updating the landcover map and exporting class areal statistics in CSV format.
+
+---
+
+## 📂 Directory Structure
 
 ```text
 GIS-/
-├── README.md                           # 本说明文件
-├── SKILL.md                            # Agent Skill 规范说明与用法指南
+├── README.md                           # This introduction and usage guide
+├── SKILL.md                            # Agent Skill specification and command references
 └── scripts/
-    └── gis_processor.py                 # 核心自包含 CLI 自动化工具脚本 (含 PEP 723 依赖声明)
+    └── gis_processor.py                 # Core CLI geoprocessing script (with inline PEP 723 metadata)
 ```
 
 ---
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-本项目完美契合现代 Python 包管理器 `uv`。无需手动 pip 安装任何第三方依赖库，`uv` 会自动通过脚本头部的 `PEP 723` 依赖声明进行安全的沙盒隔离运行。
+This project is optimized for the modern Python package manager `uv`. There is no need to manually pip install any dependencies. `uv` will automatically establish a virtual sandbox environment and download all required packages dynamically based on the script's `PEP 723` inline metadata.
 
-### 1. 环境准备
-确保系统已安装 [uv](https://github.com/astral-sh/uv)：
+### 1. Prerequisite
+Ensure [uv](https://github.com/astral-sh/uv) is installed:
 ```bash
 # Windows (PowerShell)
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### 2. 一键运行全套流程
-在克隆的项目目录下，运行 `run-all` 串联子命令：
+### 2. Run the Entire Pipeline in One Click
+From the repository root, run the `run-all` subcommand:
 ```bash
 uv run scripts/gis_processor.py run-all \
-  --base-dir "A:/HEYIXIANG/14第十四届全国大学生GIS应用技能大赛/14第十四届全国大学生GIS应用技能大赛/A上午/A上午/数据" \
-  --output-dir "A:/HEYIXIANG/14第十四届全国大学生GIS应用技能大赛/14第十四届全国大学生GIS应用技能大赛/A上午/A上午/结果"
+  --base-dir "path/to/raw/data/folder" \
+  --output-dir "path/to/output/results"
 ```
+This command will sequentially run Tasks 1, 2, and 3, saving all intermediate and final deliverables in the results folder.
 
-### 3. 单步精细化调试
-各个独立子命令同样支持单独调试运行：
+### 3. Step-by-Step Subcommands
+You can also run and debug each component separately:
 ```bash
-# 任务一：野生动物数据清洗与研究区
-uv run scripts/gis_processor.py clean-animals --input "dongwu/animal.txt" --output-gdb "result"
+# Task 1: Clean animal records and build study area buffer
+uv run scripts/gis_processor.py clean-animals --input "data/dongwu/animal.txt" --output-gdb "results"
 
-# 任务二：气象插值精度校验
-uv run scripts/gis_processor.py clean-weather --input "qixiang/Meteorological_sampling.txt" --study-area "result/study_area.shp" --output-gdb "result"
+# Task 2: Interpolate climate records and validate RMSE
+uv run scripts/gis_processor.py clean-weather --input "data/qixiang/Meteorological_sampling.txt" --study-area "results/study_area.shp" --output-gdb "results"
 ```
 
-完整的子命令参数文档和详细用法，请参阅 [SKILL.md](SKILL.md)。
+For full arguments and usage details, refer to [SKILL.md](SKILL.md).

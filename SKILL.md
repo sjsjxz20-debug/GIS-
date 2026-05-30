@@ -10,9 +10,9 @@ description: >-
 This skill provides a fully automated spatial analysis pipeline for processing the datasets of the **14th National GIS Application Skills Contest (Morning Session A)**. It converts messy, raw text data and misaligned rasters into highly accurate, publication-ready GIS deliverables.
 
 It addresses:
-- **Task 1**: Parsing non-standard DMS latitude/longitude wild animal coordinates, cleaning duplicate/outlier records, and generating a WGS84 and projected UTM 10N shapefile plus a 2km buffered study area envelope.
+- **Task 1**: Parsing non-standard DMS latitude/longitude wild animal coordinates, cleaning duplicate/outlier records, and generating WGS84 and projected UTM 10N shapefiles plus a 2km buffered study area envelope.
 - **Task 2**: Cleaning weather station attributes, converting Kelvin to Celsius, performing Delaunay triangulation-based linear grid interpolation (30m resolution) aligned to the study area, verifying interpolation RMSE against a 10% test set (RMSE <= 0.5), rendering error plots, and mosaicing/reprojecting/clipping DEM tiles.
-- **Task 3**: Warping the landcover map to 10m UTM grid, using local mode焦點眾数 matching to repair cloud pixel voids, rotating Landsat bands 90 degrees CCW (matching study area aspect ratio), running 2D fast cross-correlation using FFT to automatically calculate and apply precise spatial shift parameters ($dx=660m, dy=-18810m$), extracting water bodies and built-up land covers using MNDWI/BU index thresholds and size filters (>0.1km² for water, >1.0km² for built-up), updating landcover map, and exporting areal statistics.
+- **Task 3**: Warping the landcover map to 10m UTM grid, using local mode focal majority matching to repair cloud pixel voids, rotating Landsat bands 90 degrees CCW (matching study area aspect ratio), running 2D fast cross-correlation using FFT to automatically calculate and apply precise spatial shift parameters ($dx=660m, dy=-18810m$), extracting water bodies and built-up land covers using MNDWI/BU index thresholds and size filters (>0.1km² for water, >1.0km² for built-up), updating landcover maps, and exporting areal statistics.
 
 ## Dependencies
 This skill is powered by the unified python CLI helper script `scripts/gis_processor.py`. It requires the following packages, which are automatically resolved and isolated using `uv run`:
@@ -40,49 +40,66 @@ The skill exposes 5 specialized subcommands for fine-grained geoprocessing contr
 Cleans animal observations and creates the study area boundary.
 ```bash
 uv run scripts/gis_processor.py clean-animals \
-  --input "数据/dongwu/animal.txt" \
-  --output-gdb "结果/result_data.gdb" \
+  --input "data/dongwu/animal.txt" \
+  --output-gdb "results/result_data.gdb" \
   --buffer 2000.0
 ```
+- `--input`: Path to the raw `animal.txt` file.
+- `--output-gdb`: Output directory for the shapefiles.
+- `--buffer`: Outer buffer distance in meters (default `2000.0`).
 
 ### 2. Meteorological Sampling Interpolation (`clean-weather`)
 Processes meteorological sampling stations and generates high-resolution climate rasters.
 ```bash
 uv run scripts/gis_processor.py clean-weather \
-  --input "数据/qixiang/Meteorological_sampling.txt" \
-  --study-area "结果/result_data.gdb/study_area.shp" \
-  --output-gdb "结果/result_data.gdb" \
+  --input "data/qixiang/Meteorological_sampling.txt" \
+  --study-area "results/result_data.gdb/study_area.shp" \
+  --output-gdb "results/result_data.gdb" \
   --resolution 30.0
 ```
+- `--input`: Path to the raw weather sampling stations file.
+- `--study-area`: Path to the `study_area.shp` file generated in Task 1.
+- `--output-gdb`: Output directory.
+- `--resolution`: Grid cell resolution in meters (default `30.0`).
 
 ### 3. DEM Mosaic and Clip (`process-dem`)
 Mosaics individual elevation tiles, reprojects to UTM Zone 10N with bilinear resampling, and masks to the study area.
 ```bash
 uv run scripts/gis_processor.py process-dem \
-  --dem-dir "数据/dem" \
-  --study-area "结果/result_data.gdb/study_area.shp" \
-  --output-gdb "结果/result_data.gdb" \
+  --dem-dir "data/dem" \
+  --study-area "results/result_data.gdb/study_area.shp" \
+  --output-gdb "results/result_data.gdb" \
   --resolution 30.0
 ```
+- `--dem-dir`: Directory containing raw `demA/B/C/D.tif` tiles.
+- `--study-area`: Path to the `study_area.shp` file.
+- `--output-gdb`: Output directory.
 
 ### 4. Landsat Image CCW Rotation & FFT Auto-Registration (`register-landsat`)
 Performs 90-degree CCW rotation of Landsat, runs fast 2D cross-correlation (FFT) against the landcover water shoreline, aligns the spatial shift, and clips the 6-band image to the study area.
 ```bash
 uv run scripts/gis_processor.py register-landsat \
-  --input "数据/yingx/Landsat.tif" \
-  --landcover "结果/temp_data.gdb/landcover_repaired.tif" \
-  --output-gdb "结果/result_data.gdb"
+  --input "data/yingx/Landsat.tif" \
+  --landcover "results/temp_data.gdb/landcover_repaired.tif" \
+  --output-gdb "results/result_data.gdb"
 ```
+- `--input`: Path to raw input `Landsat.tif`.
+- `--landcover`: Path to cloud-repaired landcover map.
+- `--output-gdb`: Output directory.
 
 ### 5. Landcover Cloud Repair & Spectral Index Update (`update-landcover`)
 Repairs landcover cloud pixels, extracts water and built-up land covers using MNDWI/BU spectral indexes, burns updates into the landcover map, and exports areal statistics.
 ```bash
 uv run scripts/gis_processor.py update-landcover \
-  --input "数据/tudi/landcover.tif" \
-  --dem "结果/result_data.gdb/dem_clipped.tif" \
-  --landsat "结果/result_data.gdb/landsat_clipped.tif" \
-  --output-gdb "结果/result_data.gdb"
+  --input "data/tudi/landcover.tif" \
+  --dem "results/result_data.gdb/dem_clipped.tif" \
+  --landsat "results/result_data.gdb/landsat_clipped.tif" \
+  --output-gdb "results/result_data.gdb"
 ```
+- `--input`: Path to raw unaligned `landcover.tif`.
+- `--dem`: Path to clipped DEM raster.
+- `--landsat`: Path to registered, georeferenced Landsat raster.
+- `--output-gdb`: Output directory.
 
 ## Common Mistakes
 - **Dead Proxy Settings in Git**: If `git clone` or `git push` fails with connection errors, verify your global git proxy setting. Use `git clone -c http.proxy= -c https.proxy= ...` to bypass dead local proxies.
